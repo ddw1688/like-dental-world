@@ -1432,6 +1432,163 @@
       }
     } catch { /* The account and permission controls are still available. */ }
   }
+  
+  async function openCompleteProfilePage() {
+    if (!currentUser) {
+      showAuth('請先登入會員帳號。');
+      return;
+    }
+
+    const userId = currentUser.id;
+    const page = openNavPage('profileNav', '完善個人資料');
+    const status = page.querySelector('[role="status"]');
+
+    const form = element('form', '', 'dialog-form nav-card');
+
+    const nameLabel = element('label', '設定暱稱');
+    const nameInput = element('input', '');
+    nameInput.type = 'text';
+    nameInput.maxLength = 40;
+    nameInput.required = true;
+    nameInput.placeholder = '請輸入專屬暱稱';
+    nameLabel.append(nameInput);
+
+    const avatarLabel = element('label', '上傳個人頭像');
+    const avatarInput = element('input', '');
+    avatarInput.type = 'file';
+    avatarInput.accept = 'image/jpeg,image/png,image/webp';
+    avatarInput.required = true;
+    avatarLabel.append(avatarInput);
+
+    const occupationLabel = element('label', '選擇職業身分');
+    const occupationInput = element('select', '');
+    occupationInput.required = true;
+    occupationInput.add(new Option('請選擇職業身分', ''));
+    for (const occupation of [
+      '牙醫師',
+      '牙醫助理',
+      '牙體技術師',
+      '牙科衛生師',
+      '牙醫學生',
+      '牙材廠商',
+      '診所行政／管理人員',
+      '其他'
+    ]) {
+      occupationInput.add(new Option(occupation, occupation));
+    }
+    occupationLabel.append(occupationInput);
+
+    const cityLabel = element('label', '所在地縣市');
+    const cityInput = element('input', '');
+    cityInput.type = 'text';
+    cityInput.maxLength = 30;
+    cityInput.required = true;
+    cityInput.placeholder = '例如：台北市';
+    cityLabel.append(cityInput);
+
+    const districtLabel = element('label', '所在地區');
+    const districtInput = element('input', '');
+    districtInput.type = 'text';
+    districtInput.maxLength = 30;
+    districtInput.required = true;
+    districtInput.placeholder = '例如：大安區';
+    districtLabel.append(districtInput);
+
+    const bioLabel = element('label', '個人簡介');
+    const bioInput = element('textarea', '');
+    bioInput.maxLength = 300;
+    bioInput.rows = 4;
+    bioInput.required = true;
+    bioInput.placeholder = '簡單介紹一下自己，最多 300 字';
+    bioLabel.append(bioInput);
+
+    const save = element('button', '儲存個人資料', 'btn btn-primary');
+    save.type = 'submit';
+
+    form.append(
+      nameLabel,
+      avatarLabel,
+      occupationLabel,
+      cityLabel,
+      districtLabel,
+      bioLabel,
+      save
+    );
+
+    page.append(form);
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+
+      if (save.disabled || currentUser?.id !== userId) return;
+
+      const file = avatarInput.files?.[0];
+
+      if (!file) {
+        status.textContent = '請先選擇個人頭像。';
+        return;
+      }
+
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+      if (!allowedTypes.includes(file.type)) {
+        status.textContent = '頭像僅接受 JPG、PNG 或 WebP 格式。';
+        return;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        status.textContent = '頭像大小不可超過 2 MB。';
+        return;
+      }
+
+      save.disabled = true;
+      status.textContent = '正在儲存個人資料，請稍候…';
+
+      try {
+        const extension = file.type === 'image/png' ? 'png'
+          : file.type === 'image/webp' ? 'webp' : 'jpg';
+
+        const avatarPath = userId + '/' + crypto.randomUUID() + '.' + extension;
+
+        const { error: uploadError } = await supabaseClient
+          .storage.from('avatars')
+          .upload(avatarPath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: avatarData } = supabaseClient
+          .storage.from('avatars')
+          .getPublicUrl(avatarPath);
+
+        const { error } = await supabaseClient.rpc('complete_my_profile', {
+          p_display_name: nameInput.value.trim(),
+          p_avatar_url: avatarData.publicUrl,
+          p_occupation: occupationInput.value,
+          p_city: cityInput.value.trim(),
+          p_district: districtInput.value.trim(),
+          p_bio: bioInput.value.trim()
+        });
+
+        if (error) throw error;
+
+        showFeed();
+        feedMessage.textContent = '個人資料已完成，歡迎加入辣個牙科世界！';
+
+      } catch (error) {
+        status.textContent = error.code === '23505'
+          ? '這個暱稱已有人使用，請換一個暱稱。'
+          : error.message === '找不到尚未完成資料的會員帳號'
+            ? '這個帳號的個人資料已完成，請重新整理頁面。'
+            : '儲存失敗，請確認資料後再試一次。';
+      } finally {
+        save.disabled = false;
+      }
+    });
+  }
 
   function editDisplayName(userId, name) {
     showForum('編輯基本資料');
