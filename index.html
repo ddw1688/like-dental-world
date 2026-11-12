@@ -765,15 +765,24 @@
     if (!forumDialog.open) forumDialog.showModal();
   }
 
-  function requireMember() {
-    if (accessLevel >= 1) return true;
-    if (currentUser) {
-      feedMessage.textContent = '目前無法使用會員功能，請確認電子郵件已驗證後重新登入。';
-    } else {
-      showAuth('請先登入以使用會員功能。');
-    }
+
+function requireMember() {
+  if (accessLevel >= 1 && profileCompleted) return true;
+
+  if (currentUser && accessLevel >= 1 && !profileCompleted) {
+    openCompleteProfilePage();
     return false;
   }
+
+  if (currentUser) {
+    feedMessage.textContent = '目前無法使用會員功能，請確認電子郵件已驗證後重新登入。';
+  } else {
+    showAuth('請先登入以使用會員功能。');
+  }
+
+  return false;
+}
+
 
   function action(label, handler) {
     const button = element('button', label, 'btn btn-light');
