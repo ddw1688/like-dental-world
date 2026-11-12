@@ -1247,7 +1247,13 @@
     return navPage;
   }
 
+
   function showFeed(board = '全部', nav = 'homeNav') {
+    if (currentUser && accessLevel >= 1 && !profileCompleted) {
+      openCompleteProfilePage();
+      return;
+    }
+
     activeNav = nav;
     navPage.hidden = true;
     homeView.hidden = false;
@@ -1255,8 +1261,12 @@
     selectedCategory = board;
     searchInput.value = '';
     document.querySelector('.feed-tab[data-feed="推薦"]').click();
-    if (window.innerWidth <= 650) homeView.scrollIntoView({ block: 'start' });
+
+    if (window.innerWidth <= 650) {
+      homeView.scrollIntoView({ block: 'start' });
+    }
   }
+
 
   function historyValues(key) {
     try {
